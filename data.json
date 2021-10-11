@@ -1,0 +1,28 @@
+{
+  "servers": {
+    "221821426036899842": {
+      "targetedUsers": [],
+      "targetedChannels": [
+        "753928020766490685"
+      ],
+      "disqualifyingCharacters": [
+        ">"
+      ],
+      "admins": [
+        "209785453505675275",
+        "148531790884241409",
+        "151096633080283136"
+      ]
+    },
+    "751267109878759495": {
+      "targetedUsers": [],
+      "targetedChannels": [],
+      "disqualifyingCharacters": [
+        "<"
+      ],
+      "admins": [
+        "209785453505675275"
+      ]
+    }
+  }
+}
