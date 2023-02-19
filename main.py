@@ -1,324 +1,95 @@
-import uwuifier
-import json
 import discord
-from discord.ext import commands
-bot = commands.Bot(command_prefix='>uwu ')
+import asyncio
+import time
+from discord import app_commands
 
-bot.remove_command('help')
+intents = discord.Intents.default()
+client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client)
 
 
-@bot.event
+# View object for vote_kick (contains buttons)
+class KickButtons(discord.ui.View):
+    def __init__(self, eligible_ids):
+        super().__init__()
+        self.yesVotes = 0
+        self.noVotes = 0
+        self.voteIDs = [0]
+        self.eligibleIDs = eligible_ids
+
+    # yes button
+    @discord.ui.button(label="Yes", style=discord.ButtonStyle.green)
+    async def yes_kick_button(self, interaction, button: discord.ui.Button):
+        # checks if user is in the voice call with the vote starter
+        if interaction.user.id not in self.eligibleIDs:
+            await interaction.response.send_message("You're not in that voice channel >:(", ephemeral=True)
+        # checks if the user has already voted
+        elif interaction.user.id not in self.voteIDs:
+            self.yesVotes += 1
+            self.voteIDs.append(interaction.user.id)
+            await interaction.response.defer()
+
+    # no button
+    @discord.ui.button(label="No", style=discord.ButtonStyle.red)
+    async def no_kick_button(self, interaction, button: discord.ui.button):
+        # checks if user is in the voice call with the vote starter
+        if interaction.user.id not in self.eligibleIDs:
+            await interaction.response.send_message("You're not in that voice channel >:(", ephemeral=True)
+        # checks if the user has already voted
+        elif interaction.user.id not in self.voteIDs:
+            self.noVotes += 1
+            self.voteIDs.append(interaction.user.id)
+            await interaction.response.defer()
+
+
+# puts an embed in the text chat to kick a member of the voice chat
+@tree.command(name="vote_kick", description="vote to kick from call")
+async def vote_kick(interaction, target: discord.Member):
+    current_channel = interaction.user.voice  # shortcut to voice channel of vote starter
+    current_voice_members = []  # stores a snapshot of the voice channel members at the time of the vote
+    start_time = 0  # starting time of the vote
+
+    if current_channel is None:
+        await interaction.response.send_message("You're not in a voice channel :(", ephemeral=True)
+        return 0
+
+    # stores current members of voice channel
+    for member in current_channel.channel.members:
+        current_voice_members.append(member.id)
+    view = KickButtons(current_voice_members)
+
+    # checks if the targeted user is in the voice call
+    if target.id not in current_voice_members:
+        await interaction.response.send_message("That person isn't in your call :3", ephemeral=True)
+        return 0
+
+    # sends vote message
+    await interaction.response.send_message("Vote To Kick: " + target.display_name, view=view)
+    start_time = time.time()
+
+    # keeps the vote open unless the majority has voted yes, half has voted no, or 15 seconds have passed
+    # this is because ties result in no kick, which means only half need to vote no
+    while view.yesVotes <= (len(view.eligibleIDs) / 2) and view.noVotes < (len(view.eligibleIDs) / 2) \
+            and time.time() - start_time < 15:
+        await asyncio.sleep(1)
+
+    # vote result logic
+    if view.yesVotes > view.noVotes:
+        await target.move_to(None)
+        await interaction.edit_original_response(content="Ok, kicked " + target.display_name + \
+                                                         "\n Yes: " + str(view.yesVotes) + \
+                                                         " | No: " + str(view.noVotes), view=None)
+    else:
+        await interaction.edit_original_response(content="Vote kick on " + target.display_name + " failed" \
+                                                         "\n Yes: " + str(view.yesVotes) + \
+                                                         " | No: " + str(view.noVotes), view=None)
+
+
+# on ready
+@client.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name='">uwu help" for help'))
+    await tree.sync()
 
+client.run("ODk2NTk5ODAwNjU1NTE1NjQ4.GlmKfY.Minv8lLAnIswzPPaGssj9S7F7xd4Jmex3XDH3Q")
 
-@bot.event
-async def on_guild_join(guild):
-    print("joined", guild.id)
-    with open('data.json', 'r') as infile:
-        data = json.load(infile)
-    data['servers'][str(guild.id)] = {}
-    data['servers'][str(guild.id)]['targetedUsers'] = []
-    data['servers'][str(guild.id)]['targetedChannels'] = []
-    data['servers'][str(guild.id)]['disqualifyingCharacters'] = ['<']
-    data['servers'][str(guild.id)]['admins'] = ['209785453505675275']
-    with open('data.json', 'w') as outfile:
-        json.dump(data, outfile, indent=2)
-
-
-# useless really
-def check_access(sender):
-    newsender = str(sender)
-    with open('data.json', 'r') as infile:
-        data = json.load(infile)
-    if newsender in data['targetedUsers']:
-        if newsender in data['admins']:
-            return True
-        else:
-            return False
-
-    return True
-
-
-def check_admin(sender, server):
-    newsender = str(sender)
-    with open('data.json', 'r') as infile:
-        data = json.load(infile)
-    if newsender in data['servers'][str(server)]['admins']:
-        return True
-    else:
-        return False
-
-
-@bot.command()
-async def help(ctx):
-    embedmsg = "> help \n I really hope that's not why you came here.\n\n" \
-               "> addadmin <user> \n accepts @ or user ID, forces commands to work. Requires admin\n\n" \
-               "> removeadmin \n @Spysandwiches for use.\n\n" \
-               "> addfemboy <user> \n accepts @ or user ID, adds user to list. Requires admin\n\n" \
-               "> removefemboy <user> \n same thing but it removes. Requires admin\n\n" \
-               "> addchannel <channel> \n adds channel to bot whitelist, defaults to current channel. Requires admin\n\n" \
-               "> removechannel <channel> \n same thing but it removes. Requires admin\n\n" \
-               "> listfemboys \n see who the bottoms are\n\n" \
-               "> listchannels \n see where i'm allowed to talk\n\n"
-
-    embed = discord.Embed(title="Help me pwease!", description=embedmsg)
-    await ctx.send(embed=embed)
-
-
-# adds user to targets list
-@bot.command()
-async def addfemboy(ctx, arg):
-    if not check_admin(ctx.message.author.id, ctx.message.author.guild.id):
-        await ctx.send("Aww you think I listen to you? Adorable")
-        return()
-    if arg[0] == "<":
-        arg = arg[3:-1]
-    try:
-        await bot.fetch_user(arg)
-    except:
-        await ctx.send("That's not a real person!")
-        return()
-
-    with open('data.json', 'r+') as infile:
-        data = json.load(infile)
-    for user in data['servers'][str(ctx.message.author.guild.id)]['targetedUsers']:
-        if arg == user:
-            print("Femboy already in database. skipping.")
-            await ctx.send("I already know they're a femboy UwU")
-            return()
-    data['servers'][str(ctx.message.author.guild.id)]['targetedUsers'].append(arg)
-    with open('data.json', 'w') as outfile:
-        json.dump(data, outfile, indent=2)
-    await ctx.send("Added to the list, have fun OwO")
-    print("Femboy added!", arg)
-    return()
-
-
-@bot.command()
-async def removefemboy(ctx, arg):
-    if not check_admin(ctx.message.author.id, ctx.message.author.guild.id):
-        await ctx.send("Aww you think I listen to you? Adorable")
-        return()
-    if arg[0] == "<":
-        arg = arg[3:-1]
-
-    try:
-        await bot.fetch_user(arg)
-    except:
-        await ctx.send("That's not a real person!")
-        return()
-
-
-    with open('data.json', 'r+') as infile:
-        data = json.load(infile)
-    try:
-        data['servers'][str(ctx.message.author.guild.id)]['targetedUsers'].remove(arg)
-    except(ValueError):
-        await ctx.send("I don't know that person. Perhaps you should introduce us first?")
-        return()
-    with open('data.json', 'w') as outfile:
-        json.dump(data, outfile, indent=2)
-    await ctx.send("Removed from the list. Bai bai :3")
-    print("Femboy removed!", arg)
-    return()
-
-
-@bot.command()
-async def addadmin(ctx, arg=None):
-    with open('data.json', 'r') as infile:
-        data = json.load(infile)
-    if str(ctx.message.author.id) not in data['admins']:
-        await ctx.send("You have to be an admin to make an admin. Duh")
-    if arg is not None and arg[0] == "<":
-        arg = arg[3:-1]
-
-    try:
-        await bot.fetch_user(arg)
-    except:
-        await ctx.send("That's not a real person!")
-        return()
-
-
-    with open('data.json', 'r') as infile:
-        data = json.load(infile)
-        for admin in data['servers'][str(ctx.message.author.guild.id)]['admins']:
-            if admin == arg:
-                await ctx.send("I'm already accepting commands from them!")
-                return()
-        data['servers'][str(ctx.message.author.guild.id)]['admins'].append(arg)
-        with open('data.json', 'w') as outfile:
-            json.dump(data, outfile, indent=2)
-        await ctx.send("Alright, I'll listen to them from now on!")
-
-
-@bot.command()
-async def addchannel(ctx, arg=None):
-    if not check_admin(ctx.message.author.id, ctx.message.author.guild.id):
-        await ctx.send("Aww you think I listen to you? Adorable")
-        return()
-    if arg is not None and arg[0] == "<":
-        arg = arg[2:-1]
-    elif arg is not None:
-        pass
-        # stops else from triggering if raw channel id is input
-    else:
-        arg = str(ctx.message.channel.id)
-
-    try:
-        await bot.fetch_channel(arg)
-    except:
-        await ctx.send("That's not a real channel!")
-        return ()
-
-    with open('data.json', 'r+') as infile:
-        data = json.load(infile)
-    for channel in data['servers'][str(ctx.message.author.guild.id)]['targetedChannels']:
-        if arg == channel:
-            print("Channel already in database. skipping.")
-            await ctx.send("I'm already allowed in that channel hehe")
-            return()
-    data['servers'][str(ctx.message.author.guild.id)]['targetedChannels'].append(arg)
-    with open('data.json', 'w') as outfile:
-        json.dump(data, outfile, indent=2)
-    await ctx.send("Added to the list, have fun OwO")
-    print("Channel added!", arg)
-    return()
-
-
-@bot.command()
-async def removechannel(ctx, arg=None):
-    if not check_admin(ctx.message.author.id, ctx.message.author.guild.id):
-        await ctx.send("Aww you think I listen to you? Adorable")
-        return()
-    if arg is not None and arg[0] == "<":
-        arg = arg[2:-1]
-    elif arg is not None:
-        pass
-        # stops else from triggering if raw channel id is input
-    else:
-        arg = str(ctx.message.channel.id)
-
-    try:
-        await bot.fetch_channel(arg)
-    except:
-        await ctx.send("That's not a real channel!")
-        return()
-
-    with open('data.json', 'r+') as infile:
-        data = json.load(infile)
-    try:
-        data['servers'][str(ctx.message.author.guild.id)]['targetedChannels'].remove(arg)
-    except ValueError:
-        await ctx.send("I'm not even allowed in there!")
-        return()
-    with open('data.json', 'w') as outfile:
-        json.dump(data, outfile, indent=2)
-    await ctx.send("Ok, I'll leave that channel alone UnU")
-    print("Channel removed", arg)
-    return()
-
-
-@bot.command()
-async def addavoidchar(ctx, arg):
-    if not check_admin(ctx.message.author.id, ctx.message.author.guild.id):
-        await ctx.send("Aww you think I listen to you? Adorable")
-        return()
-    if len(arg) > 1:
-        await ctx.send("It has to be a single character.")
-        return()
-    with open('data.json', 'r+') as infile:
-        data = json.load(infile)
-        for char in data['servers'][str(ctx.message.author.guild.id)]['disqualifyingCharacters']:
-            if char == arg:
-                await ctx.send("I already avoid that character")
-                return()
-        data['servers'][str(ctx.message.author.guild.id)]['disqualifyingCharacters'].append(arg)
-        with open('data.json', 'w') as outfile:
-            json.dump(data, outfile, indent=2)
-        await ctx.send("Alright, I'll avoid that from now on!")
-        return()
-
-
-@bot.command()
-async def removeavoidchar(ctx, arg):
-    if not check_admin(ctx.message.author.id, ctx.message.author.guild.id):
-        await ctx.send("Aww you think I listen to you? Adorable")
-        return()
-    if len(arg) > 1:
-        await ctx.send("It has to be a single character.")
-        return()
-    with open('data.json', 'r+') as infile:
-        data = json.load(infile)
-        try:
-            data['servers'][str(ctx.message.author.guild.id)]['disqualifyingCharacters'].remove(arg)
-        except(ValueError):
-            await ctx.send("I don't avoid that character!")
-            return()
-        with open('data.json', 'w') as outfile:
-            json.dump(data, outfile, indent=2)
-        await ctx.send("Alright, I'll stop avoiding that!")
-        return()
-
-
-@bot.command()
-async def listfemboys(ctx):
-    embedmsg = ""
-    with open('data.json', 'r+') as infile:
-        data = json.load(infile)
-        for user in data['servers'][str(ctx.message.author.guild.id)]['targetedUsers']:
-            newuser = await bot.fetch_user(user)
-            embedmsg += newuser.name + "#" + newuser.discriminator + "\n"
-
-    embed = discord.Embed(title="The subs", description=embedmsg)
-    await ctx.send(embed=embed)
-
-
-@bot.command()
-async def listchannels(ctx):
-    embedmsg = ""
-    with open('data.json', 'r+') as infile:
-        data = json.load(infile)
-        for channel in data['servers'][str(ctx.message.author.guild.id)]['targetedChannels']:
-            newchannel = await bot.fetch_channel(channel)
-            embedmsg += newchannel.name + "\n"
-
-    embed = discord.Embed(title="Channels", description=embedmsg)
-    await ctx.send(embed=embed)
-
-
-# checks targeted user and channel, then executes UwU shit
-@bot.listen()
-async def on_message(message):
-    print(message)
-    if message.author.name == "UwU Bot":
-        print("self message.")
-        return()
-
-    with open('data.json', 'r+') as f:
-        print("checking disq.char...")
-        data = json.load(f)
-        for char in data['servers'][str(message.author.guild.id)]['disqualifyingCharacters']:
-            if char == message.content[0]:
-                print("message disqualified,", char, "detected")
-                return()
-        print("checking channels...")
-        for item in data['servers'][str(message.author.guild.id)]['targetedChannels']:
-            if item == str(message.channel.id):
-                print("checking user...")
-                for user in data['servers'][str(message.author.guild.id)]['targetedUsers']:
-                    if user == str(message.author.id):
-                        # FEMBOY DETECTED
-                        print("femboy found, user:", message.author.name, "said:", message.content + ". UwUing.")
-                        sendMsg = message.author.name + " says: " + uwuifier.makeuwu(message.content)
-                        await message.channel.send(sendMsg)
-                        await message.delete()
-    return()
-bot.run("no")
-
-
-
-# TODO
-# rewrite for loops as 'in/not in'
-# find other stuff
 
