@@ -90,6 +90,6 @@ async def vote_kick(interaction, target: discord.Member):
 async def on_ready():
     await tree.sync()
 
-client.run("ODk2NTk5ODAwNjU1NTE1NjQ4.GlmKfY.Minv8lLAnIswzPPaGssj9S7F7xd4Jmex3XDH3Q")
+client.run("Secret")
 
 
