@@ -33,3 +33,35 @@ class KickButtons(discord.ui.View):
             self.noVotes += 1
             self.voteIDs.append(interaction.user.id)
             await interaction.response.defer()
+
+
+class RPSButtons(discord.ui.View):
+    def __init__(self):
+        super().__init__()
+        self.player_choice = None  # stores player choice
+        self.choices = ["rock", "paper", "scissors"]  # stores possible choices
+        self.win_dict = {  # stores win conditions for all the choices
+            "rock": "scissors",
+            "paper": "rock",
+            "scissors": "paper"
+        }
+        self.icons = {  # stores icons for fancy output
+            "rock": "🪨",
+            "scissors": "✂️",
+            "paper": "🗒️"}
+
+    # Rock button
+    @discord.ui.button(label="Rock", style=discord.ButtonStyle.blurple, emoji="🪨")
+    async def rock_button(self, interaction, button: discord.ui.Button):
+        self.player_choice = self.choices[0]
+
+    # Paper button
+    @discord.ui.button(label="Paper", style=discord.ButtonStyle.blurple, emoji="🗒️")
+    async def paper_button(self, interaction, button: discord.ui.Button):
+        self.player_choice = self.choices[1]
+
+    # Scissor button
+    @discord.ui.button(label="Scissors", style=discord.ButtonStyle.blurple, emoji="✂️")
+    async def scissor_button(self, interaction, button: discord.ui.Button):
+        self.player_choice = self.choices[2]
+
