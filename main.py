@@ -4,14 +4,14 @@ import time
 import random
 import views
 import functions
+import json
 from discord import app_commands
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-VERSION = "v. 0.2a"
-
+VERSION = "v. 0.2.1a"
 
 # ========== ADMINISTRATIVE/FUNCTIONAL COMMANDS ==========
 
@@ -81,6 +81,14 @@ async def uwuify(interaction, message: str, hidden: bool = True):
     functions.console_output(event_name, interaction.user.id)
 
 
+@tree.command(name="leet_speak", description="1337 sp34k a sentance")
+async def leet_speak(interaction, message: str, hidden: bool = True):
+    # all the logic is handled by functions.uwuify
+    event_name = "leetspeak"
+    await interaction.response.send_message(content=functions.leet_speak(message), ephemeral=hidden)
+    functions.console_output(event_name, interaction.user.id)
+
+
 # just passes the message through to chat useful for testing the bot and making jokes
 @tree.command(name="say", description="I'll say something in chat for you (don't abuse this)")
 async def say(interaction, message: str):
@@ -128,30 +136,62 @@ async def random_number(interaction, minimum: int, maximum: int, hidden: bool = 
 # plays rock paper scissors with the user
 @tree.command(name="rock_paper_scissors", description="Play rock paper scissors.")
 async def rock_paper_scissors(interaction, hidden: bool = False):
+    event_name = "RPS"
     view = views.RPSButtons()  # buttons
+    rematch_view = views.RPSRematch()  # rematch button
     start_time = time.time()  # start time, used for a 30-second timer
-    bot_choice = ""  # stores the bots choice
-    result = ""
-    win = "You win!"
-    lose = "You lost..."
+    finished = False  # used to stop loop, determined by rematch button
+    result = ""  # stores win/loss for output message
 
+    # send original message
     await interaction.response.send_message(content="Make your choice:", view=view, ephemeral=hidden)
-    while view.player_choice is None and time.time() - 30 < start_time:
-        await asyncio.sleep(1)
-    if view.player_choice is None:
-        interaction.edit_original_response(content="I'm going to sleep.", view=None)
 
-    else:
-        bot_choice = view.choices[random.randint(0, 2)]
-        if bot_choice == view.player_choice:
-            result = "It's a tie!"
-        elif view.win_dict[view.player_choice] == bot_choice:
-            result = win
-        elif view.win_dict[bot_choice] == view.player_choice:
-            result = lose
-        await interaction.edit_original_response(content=result + "\nYOU | UwU \n " +
-                                                 view.icons[view.player_choice] +
-                                                 "     " + view.icons[bot_choice], view=None)
+    # main loop
+    while not finished:
+        # resetting variables for new round upon rematch
+        if rematch_view.clicked:
+            await interaction.edit_original_response(content="Make your choice:", view=view)
+            view.bot_choice = None
+            view.player_choice = None
+            rematch_view.clicked = False
+            start_time = time.time()
+            result = ""
+
+        # starts timer, waits for plaer choice
+        while view.player_choice is None and time.time() - 30 < start_time:
+            await asyncio.sleep(1)
+        # catches time out
+        if view.player_choice is None:
+            await interaction.edit_original_response(content="I'm going to sleep.", view=None)
+            finished = True
+            result = "Timed out"
+        else:
+            view.bot_choice = view.choices[random.randint(0, 2)]  # picks bot choice
+            # win logic
+            if view.bot_choice == view.player_choice:
+                result = "It's a tie!"
+            elif view.win_dict[view.player_choice] == view.bot_choice:
+                result = "You win!"
+            elif view.win_dict[view.bot_choice] == view.player_choice:
+                result = "You lost..."
+            # output
+            await interaction.edit_original_response(content=result + "\nYOU | UwU \n" +
+                                                     view.icons[view.player_choice] +
+                                                     "     " + view.icons[view.bot_choice], view=rematch_view)
+            # timer for rematch button
+            start_time = time.time()
+            while not rematch_view.clicked and time.time() - 60 < start_time:
+                await asyncio.sleep(1)
+            # if rematch button isn't clicked
+            if not rematch_view.clicked:
+                finished = True
+                # resends response without rematch button
+                await interaction.edit_original_response(content=result + "\nYOU | UwU \n" +
+                                                         view.icons[view.player_choice] +
+                                                         "     " + view.icons[view.bot_choice], view=None)
+        # loop restarts here, rematch button being pressed causes another pass through,
+        # no press will result in the loop ending
+    functions.console_output(event_name, interaction.user.id, outcome=result)
 
 
 # ========== INFORMATIONAL COMMANDS ==========
@@ -187,7 +227,7 @@ async def patch(interaction, hidden: bool = True):
                 embed.add_field(name=line[1:-1], value="", inline=False)
             # same as above for change categories, but ignores more of the #'s
             elif line[0] == '#':
-                embed.add_field(name=line[3:-1], value="", inline=False)
+                embed.add_field(name="==" + line[3:-1] + "==", value="", inline=False)
             else:
                 embed.add_field(name="", value=line[1:-1], inline=False)
 
@@ -201,15 +241,75 @@ async def patch(interaction, hidden: bool = True):
 @client.event
 async def on_ready():
     await tree.sync()
-    await client.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="for femboys OwO"))
+    await client.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="you sleep."))
+
+
+# on message, used for warning user's to turn @'s off on replies
+@client.event
+async def on_message(message):
+    message_author = str(message.author.id)
+    raw_file = open('reply_mentions_storage.json', 'r')
+    infile = json.load(raw_file)
+
+    # initialize unrecognized user
+    if message_author not in infile['ids'].keys():
+        infile['ids'][message_author] = {"timestamps": [],
+                                         "last_warning": 0}
+
+    # checks if message is a reply
+    if message.reference is not None:
+        original_channel = await client.fetch_channel(message.reference.channel_id)
+        original_message = await original_channel.fetch_message(message.reference.message_id)
+
+        # checks if reply mentions the original commentor
+        for mention in message.mentions:
+            if mention == original_message.author:
+
+                # deletes timestamps older than 48 hours
+                current_time = time.time()
+                for timestamp in infile['ids'][message_author]["timestamps"]:
+                    if current_time - timestamp > 172800:
+                        infile['ids'][message_author]["timestamps"].pop(timestamp)
+
+                # triggers warning if more than 2 @'s in the past 24 hours
+                if len(infile['ids'][message_author]["timestamps"]) >= 2:
+                    if time.time() - infile['ids'][message_author]["last_warning"] > 86400:
+                        send_message = "<@" + message_author + \
+                                       "> Hey, you've been replying to people without turning " \
+                                       "the @ off. This is incredibly fucking annoying.\n" \
+                                       "turn it off."
+                        await original_channel.send(content=send_message)
+                        infile['ids'][message_author]["last_warning"] = time.time()
+                        functions.console_output("Warned user for reply @'s", message_author)
+                    else:
+                        functions.console_output("Warned user for reply @'s", message_author, outcome="on cooldown")
+                    infile['ids'][message_author]["timestamps"].clear()
+
+                # adds a strike
+                else:
+                    infile['ids'][message_author]["timestamps"].append(time.time())
+                    functions.console_output("Added @ strike", message_author)
+
+    with open('reply_mentions_storage.json', 'w') as outfile:
+        json.dump(infile, outfile, indent=4, sort_keys=True)
+
+
+
+
 
 client.run("secret")
 
 
 # todo
+# make @ warning configurable
+# make @ warning based on server
+# bad apple status
+# better documentation
 # tic tac toe
-# add unfair mode to RPS (can't win)
-# add rematch to RPS
+# add support for 2 player games (rps, tic-tac-toe, etc.)
+# add support for more than 1 number from /random_number
 # make fancy embed for RPS
 # rewrite vote_kick output to be a fancy embed
+# add chess (large project)
+# minesweeper (large project)
 # find cool shit to add

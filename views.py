@@ -1,5 +1,5 @@
 import discord
-
+import time
 
 # View object for vote_kick (contains buttons)
 class KickButtons(discord.ui.View):
@@ -37,8 +37,9 @@ class KickButtons(discord.ui.View):
 
 class RPSButtons(discord.ui.View):
     def __init__(self):
-        super().__init__()
+        super().__init__(timeout=None)
         self.player_choice = None  # stores player choice
+        self.bot_choice = None
         self.choices = ["rock", "paper", "scissors"]  # stores possible choices
         self.win_dict = {  # stores win conditions for all the choices
             "rock": "scissors",
@@ -51,17 +52,31 @@ class RPSButtons(discord.ui.View):
             "paper": "🗒️"}
 
     # Rock button
-    @discord.ui.button(label="Rock", style=discord.ButtonStyle.blurple, emoji="🪨")
+    @discord.ui.button(label="Rock", style=discord.ButtonStyle.blurple, emoji="🪨", custom_id="rock_button")
     async def rock_button(self, interaction, button: discord.ui.Button):
         self.player_choice = self.choices[0]
+        await interaction.response.defer()
 
     # Paper button
-    @discord.ui.button(label="Paper", style=discord.ButtonStyle.blurple, emoji="🗒️")
+    @discord.ui.button(label="Paper", style=discord.ButtonStyle.blurple, emoji="🗒️", custom_id="paperb_utton")
     async def paper_button(self, interaction, button: discord.ui.Button):
         self.player_choice = self.choices[1]
+        await interaction.response.defer()
 
     # Scissor button
-    @discord.ui.button(label="Scissors", style=discord.ButtonStyle.blurple, emoji="✂️")
+    @discord.ui.button(label="Scissors", style=discord.ButtonStyle.blurple, emoji="✂️", custom_id="scissors_button")
     async def scissor_button(self, interaction, button: discord.ui.Button):
         self.player_choice = self.choices[2]
+        await interaction.response.defer()
 
+
+class RPSRematch(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.clicked = False
+        start_time = time.time()
+
+    @discord.ui.button(label="Rematch?", style=discord.ButtonStyle.blurple, custom_id="rematch_button")
+    async def rematch_button(self, interaction, button: discord.ui.button):
+        self.clicked = True
+        await interaction.response.defer()
