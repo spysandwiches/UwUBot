@@ -1,12 +1,15 @@
-# v. 0.2.1a
+# v. 0.2.2a
 ### Additions
-- added rematch button to /rock_paper_scissors
-- added /leet_speak, t41k 1ik3 th1s
-- added an automatic warning for users that repeatedly leave @'s on in replies (will be optional in future updates)
+- /play_song plays a song from youtube
+  - parameters:
+  - link - the link to the song
+  - volume - float betweeen 0.01 and 1.5, volume multiplier
 ### Changes and Bugfixes
-- fixed a crash related to /rock_paper_scissors
-- further /patch formatting changes
-- fixed potential unnecessary error message during /rock_paper_scissors
+- slight adjustments to leet_speak algorithm
 ### Internals
-- added console output for /rock_paper_scissors
-- reply_mentions_storage.json used for storing timestamps of reply mentions
+- console now has fancy startup 
+- functions.get_youtube_vid() makes an mp3 out of a youtube link (slow and synchronous, up for a rewrite)
+- functions.get_song_name() gets the title of a youtube video (relies on same library, likely rewrite)
+### Known Bugs
+- /play_song will freeze the whole bot until it's done downloading that song
+  - uses syncronous functions, need to figure out a way to avoid them

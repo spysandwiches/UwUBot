@@ -1,0 +1,2 @@
+put bot token in client.run() at the bottom
+put FFmpeg.exe in /dependencies

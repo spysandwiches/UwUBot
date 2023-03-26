@@ -1,3 +1,20 @@
+import os
+import time
+from pytube import YouTube
+
+
+def startup_display():
+    os.system("cls")
+    print("  _    _              _    _ ")
+    print(" | |  | |            | |  | |")
+    print(" | |  | | __      __ | |  | |")
+    print(" | |  | | \\ \\ /\\ / / | |  | |")
+    print(" | |__| |  \\ V  V /  | |__| |")
+    print("  \\____/    \\_/\\_/    \\____/ ")
+    print("                             ")
+    print("_____________________________")
+
+
 def console_output(event, creator, target=None, outcome=None):
     """
     outputs to console for debugging purposes
@@ -65,6 +82,7 @@ def uwuify(message):
     return new_message
 
 
+# converts input message to 1337 sp34k
 def leet_speak(message):
     new_message = ""  # return value
     split_message = message.lower().split(" ")  # lowercases message, splits on space
@@ -75,7 +93,8 @@ def leet_speak(message):
         "o": "0",
         "a": "4",
         "z": "2",
-        "g": "9"
+        "g": "9",
+        "s": "5"
     }
 
     for word in split_message:
@@ -90,3 +109,38 @@ def leet_speak(message):
 
     return new_message
 
+
+async def get_youtube_vid(working_dir, link):
+    acceptable_character = "abcdefghijklmnopqrstuvwxyz1234567890"
+    save_path = "\\youtubeBuffer"
+    video_title = ""
+    max_rate_itag = 0
+    max_rate = 0
+    currtime = time.time()
+
+    try:
+        yt = YouTube(link)
+    except:
+        print("oh fuckles")
+
+    video_title = yt.title
+    streams = yt.streams.filter(only_audio=True)
+
+    for audio_track in streams:
+        if int(audio_track.abr[:-4]) > max_rate:
+            max_rate = int(audio_track.abr[:-4])
+            max_rate_itag = audio_track.itag
+
+    final_title = ''.join(filter(str.isalnum, video_title))
+    final_title = final_title + str(time.time()).replace(".", "")
+    final_stream = yt.streams.get_by_itag(max_rate_itag)
+    return final_stream.download(output_path=(working_dir + "/youtubeBuffer"), filename=(final_title + ".mp3")), video_title
+
+
+async def get_song_name(link):
+    try:
+        yt = YouTube(link)
+    except:
+        print("shit")
+
+    return yt.title

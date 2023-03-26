@@ -1,19 +1,25 @@
+import os
+
 import discord
 import asyncio
 import time
 import random
+
+import dataStructures
 import views
 import functions
 import json
 from discord import app_commands
+from discord.ext import commands
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-VERSION = "v. 0.2.1a"
+VERSION = "v. 0.2.2a"
 
 # ========== ADMINISTRATIVE/FUNCTIONAL COMMANDS ==========
+
 
 # puts an embed in the text chat to kick a member of the voice chat
 @tree.command(name="vote_kick", description="vote to kick from call")
@@ -69,6 +75,80 @@ async def vote_kick(interaction, target: discord.Member):
                                                                  " | No: " + str(view.noVotes), view=None)
 
     functions.console_output(event_name, interaction.user.id, target.id, event_result)
+
+
+# probably getting rewritten
+@tree.command(name="play_song", description="Plays a song from youtube. Don't tell discord ;)")
+async def play_song(interaction, link: str, volume: float = 0.6):
+    connected = False  # tests for bot already being connected
+    temp_name = ""  # holds name of song for dataStructures.QueuedSong
+    temp_path = ""  # holds path for song
+    guild_id = interaction.guild_id
+    current_directory = os.getcwd().replace("\\", "/")
+    if "www.youtube.com" not in link:
+        await interaction.response.send_message("Bad Link.")
+    else:
+        voice_channel = interaction.user.voice.channel
+        if volume > 1.5:
+            volume = 1.5
+        elif volume < .01:
+            volume = .01
+
+        # checking if bot is already in this server's vc
+        for vc in client.voice_clients:
+            if voice_channel == vc.channel:
+                connected = True  # prevents bot from trying to rejoin vc
+
+        if connected:
+            await interaction.response.send_message("Adding...")
+
+        else:
+            await interaction.response.send_message("Fetching song, this could take a minute. (" +
+                                                    await functions.get_song_name(link) + ")")
+
+        # add song to queue
+        if interaction.guild_id not in client.music_queue:  # initializing new server
+            client.music_queue[guild_id] = []
+        temp_path, temp_name = await functions.get_youtube_vid(current_directory, link)  # getting song
+        temp_path = temp_path.replace("\\", "/")  # formatting file path
+        # storing QueuedSong object in client.music_queue
+        client.music_queue[guild_id].append(dataStructures.QueuedSong(temp_path, temp_name))
+
+        if connected:
+            await interaction.edit_original_response(content=("Added: " + await functions.get_song_name(link) +
+                                                              " to the queue"))
+
+        # not connected, acts as loop
+        if not connected:
+            voice_client = await voice_channel.connect()
+            while len(client.music_queue[guild_id]) > 0:  # while music is queued
+                current_path = client.music_queue[guild_id][0].file_path
+                current_name = client.music_queue[guild_id][0].real_name
+                player = discord.FFmpegPCMAudio(current_path, executable=(current_directory + "/dependencies/ffmpeg"),
+                                                options='-filter:a "volume=' + str(volume) + '"')
+                # play song
+                voice_client.play(player)
+                while voice_client.is_playing():
+                    await asyncio.sleep(5)
+                # delete played song
+                os.remove(client.music_queue[guild_id][0].file_path)
+                del client.music_queue[guild_id][0]
+            await voice_client.disconnect()
+
+
+# shows music_queue for current server
+@tree.command(name="show_queue", description="shows current music queue")
+async def show_queue(interaction):
+    message = ""
+    if interaction.guild_id not in  client.music_queue:
+        message = "no songs queued..."
+    else:
+        for song in client.music_queue[interaction.guild_id]:
+            message += song.real_name + "\n"
+        if message is None:
+            message = "no songs queued..."
+
+    await interaction.response.send_message(message)
 
 
 # ========== FUN COMMANDS ==========
@@ -242,6 +322,8 @@ async def patch(interaction, hidden: bool = True):
 async def on_ready():
     await tree.sync()
     await client.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="you sleep."))
+    client.music_queue = {} # stores guild_ids which hold lists of dataStructures.QueuedSong objects
+    functions.startup_display()
 
 
 # on message, used for warning user's to turn @'s off on replies
@@ -294,15 +376,15 @@ async def on_message(message):
         json.dump(infile, outfile, indent=4, sort_keys=True)
 
 
+client.run("token")
 
-
-
-client.run("secret")
 
 
 # todo
 # make @ warning configurable
 # make @ warning based on server
+# /play_song sucks
+# switch off pytube for /play_song (throws giant errors but still works, seems to be a bug)
 # bad apple status
 # better documentation
 # tic tac toe
